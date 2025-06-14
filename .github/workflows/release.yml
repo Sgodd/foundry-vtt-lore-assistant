@@ -1,0 +1,95 @@
+name: Create Release
+
+on:
+    push:
+        branches: [main]
+        tags: ["v*"]
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Extract version from module.json
+              id: version
+              run: |
+                  VERSION=$(jq -r '.version' module.json)
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+            - name: Check if tag exists
+              id: check_tag
+              run: |
+                  if git rev-parse --verify refs/tags/v${{ steps.version.outputs.version }} >/dev/null 2>&1; then
+                    echo "exists=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "exists=false" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Create module archive
+              if: steps.check_tag.outputs.exists == 'false'
+              run: |
+                  # Create a clean directory for the module
+                  mkdir -p dist
+
+                  # Copy all files except git, github, and dist folders
+                  rsync -av --exclude='.git' --exclude='.github' --exclude='dist' --exclude='node_modules' . dist/
+
+                  # Create the zip file
+                  cd dist
+                  zip -r ../module.zip .
+                  cd ..
+
+            - name: Create Release
+              if: steps.check_tag.outputs.exists == 'false'
+              id: create_release
+              uses: actions/create-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: ${{ steps.version.outputs.tag }}
+                  release_name: AI Lore Assistant ${{ steps.version.outputs.tag }}
+                  body: |
+                      ## AI Lore Assistant ${{ steps.version.outputs.version }}
+
+                      ### Installation
+
+                      **Manifest URL:**
+                      ```
+                      https://github.com/Sgodd/foundry-vtt-lore-assistant/releases/latest/download/module.json
+                      ```
+
+                      **Direct Download:**
+                      ```
+                      https://github.com/Sgodd/foundry-vtt-lore-assistant/releases/latest/download/foundry-vtt-lore-assistant.zip
+                      ```
+
+                      ### Changes
+                      - See [CHANGELOG.md](https://github.com/Sgodd/foundry-vtt-lore-assistant/blob/main/CHANGELOG.md) for detailed changes
+                  draft: false
+                  prerelease: false
+
+            - name: Upload module.json
+              if: steps.check_tag.outputs.exists == 'false'
+              uses: actions/upload-release-asset@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  upload_url: ${{ steps.create_release.outputs.upload_url }}
+                  asset_path: ./module.json
+                  asset_name: module.json
+                  asset_content_type: application/json
+
+            - name: Upload module archive
+              if: steps.check_tag.outputs.exists == 'false'
+              uses: actions/upload-release-asset@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  upload_url: ${{ steps.create_release.outputs.upload_url }}
+                  asset_path: ./module.zip
+                  asset_name: moodule.zip
+                  asset_content_type: application/zip

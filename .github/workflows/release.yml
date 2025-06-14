@@ -29,18 +29,27 @@ jobs:
                     echo "exists=false" >> $GITHUB_OUTPUT
                   fi
 
+            - name: Setup Node.js
+              if: steps.check_tag.outputs.exists == 'false'
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18"
+                  cache: "npm"
+
+            - name: Install dependencies
+              if: steps.check_tag.outputs.exists == 'false'
+              run: npm ci
+
+            - name: Build TypeScript
+              if: steps.check_tag.outputs.exists == 'false'
+              run: npm run build:prod
+
             - name: Create module archive
               if: steps.check_tag.outputs.exists == 'false'
               run: |
-                  # Create a clean directory for the module
-                  mkdir -p dist
-
-                  # Copy all files except git, github, and dist folders
-                  rsync -av --exclude='.git' --exclude='.github' --exclude='dist' --exclude='node_modules' . dist/
-
-                  # Create the zip file
+                  # Create the zip file from the dist folder contents
                   cd dist
-                  zip -r ../module.zip .
+                  zip -r ../foundry-vtt-lore-assistant.zip .
                   cd ..
 
             - name: Create Release
@@ -79,7 +88,7 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   upload_url: ${{ steps.create_release.outputs.upload_url }}
-                  asset_path: ./module.json
+                  asset_path: ./dist/module.json
                   asset_name: module.json
                   asset_content_type: application/json
 
@@ -91,5 +100,5 @@ jobs:
               with:
                   upload_url: ${{ steps.create_release.outputs.upload_url }}
                   asset_path: ./module.zip
-                  asset_name: moodule.zip
+                  asset_name: foundry-vtt-lore-assistant.zip
                   asset_content_type: application/zip
